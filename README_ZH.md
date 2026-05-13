@@ -40,6 +40,8 @@ npm install -g git+https://github.com/Dailin521/codex-provider-sync.git
 codex-provider sync
 ```
 
+CLI 需要 Node.js `24+`。如果使用 Node 20/22，可能会看到 `node:sqlite` 不存在的错误。
+
 更多 CLI 常用命令：
 
 ```bash

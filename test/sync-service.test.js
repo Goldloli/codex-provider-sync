@@ -15,6 +15,7 @@ import {
 } from "../src/backup.js";
 import { getStatus, renderStatus, runRestore, runSwitch, runSync } from "../src/service.js";
 import { DEFAULT_BACKUP_RETENTION_COUNT } from "../src/constants.js";
+import { getUnsupportedNodeVersionMessage } from "../src/node-version.js";
 import { applySessionChanges, collectSessionChanges } from "../src/session-files.js";
 
 async function makeTempCodexHome() {
@@ -1046,6 +1047,14 @@ test("cli rejects non-integer keep values", async () => {
   const result = await runCli(["prune-backups", "--keep", "1.5"]);
   assert.equal(result.code, 1);
   assert.match(result.stderr, /Invalid --keep value: 1\.5/);
+});
+
+test("node version guard explains node:sqlite requirement", () => {
+  assert.equal(getUnsupportedNodeVersionMessage("24.0.0"), null);
+  assert.match(
+    getUnsupportedNodeVersionMessage("20.18.1"),
+    /requires Node\.js 24\+ because it uses node:sqlite/
+  );
 });
 
 test("cli sync prints stage progress and backup timing", async () => {

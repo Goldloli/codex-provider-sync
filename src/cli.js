@@ -4,14 +4,12 @@ import path from "node:path";
 
 import { DEFAULT_BACKUP_RETENTION_COUNT } from "./constants.js";
 import { installWindowsLauncher } from "./launcher.js";
-import {
-  getStatus,
-  renderStatus,
-  runPruneBackups,
-  runRestore,
-  runSwitch,
-  runSync
-} from "./service.js";
+import { assertSupportedNodeVersion } from "./node-version.js";
+
+async function loadService() {
+  assertSupportedNodeVersion();
+  return import("./service.js");
+}
 
 function printHelp() {
   console.log(`codex-provider
@@ -186,12 +184,14 @@ async function main() {
   }
 
   if (command === "status") {
+    const { getStatus, renderStatus } = await loadService();
     const status = await getStatus({ codexHome: flags["codex-home"] });
     console.log(renderStatus(status));
     return;
   }
 
   if (command === "sync") {
+    const { runSync } = await loadService();
     const result = await runSync({
       codexHome: flags["codex-home"],
       provider: flags.provider,
@@ -203,6 +203,7 @@ async function main() {
   }
 
   if (command === "switch") {
+    const { runSwitch } = await loadService();
     const provider = positionals[1] ?? flags.provider;
     const result = await runSwitch({
       codexHome: flags["codex-home"],
@@ -215,6 +216,7 @@ async function main() {
   }
 
   if (command === "prune-backups") {
+    const { runPruneBackups } = await loadService();
     const result = await runPruneBackups({
       codexHome: flags["codex-home"],
       keepCount: parseKeepCount(flags.keep, { allowZero: true })
@@ -224,6 +226,7 @@ async function main() {
   }
 
   if (command === "restore") {
+    const { runRestore } = await loadService();
     const backupDir = positionals[1] ?? flags.backup;
     const result = await runRestore({
       codexHome: flags["codex-home"],

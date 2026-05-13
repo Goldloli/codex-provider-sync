@@ -54,6 +54,7 @@ npm install -g git+https://github.com/Dailin521/codex-provider-sync.git
 Requirements:
 
 - Node.js `24+`
+- Node.js 20/22 can fail with a missing `node:sqlite` built-in module.
 - standard `~/.codex` layout
 - Windows is the primary tested target for now
 
