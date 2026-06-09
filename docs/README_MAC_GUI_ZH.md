@@ -10,6 +10,12 @@
 ./scripts/publish-gui-macos.sh
 ```
 
+构建 Intel (x86_64) 版本：
+
+```bash
+./scripts/publish-gui-macos.sh --runtime osx-x64 --output artifacts/osx-x64
+```
+
 默认产物：
 
 ```text
