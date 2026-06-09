@@ -16,6 +16,8 @@ public sealed class MainWindow : Window
 
     private readonly TextBox _codexHomeText = new();
     private readonly ComboBox _recentHomes = new();
+    private readonly TextBlock _languageLabel = new();
+    private readonly ComboBox _languageCombo = new();
     private readonly Button _browseButton = new();
     private readonly Button _refreshButton = new();
     private readonly TextBlock _busyText = new();
@@ -35,10 +37,20 @@ public sealed class MainWindow : Window
     private readonly Button _openBackupButton = new();
     private readonly Button _pruneBackupsButton = new();
     private readonly TextBox _logText = new();
+    private readonly TextBlock _codexHomeLabel = new();
+    private readonly TextBlock _statusTitle = new();
+    private readonly TextBlock _providersTitle = new();
+    private readonly TextBlock _actionsTitle = new();
+    private readonly TextBlock _logTitle = new();
+    private readonly TextBlock _targetProviderLabel = new();
+    private readonly TextBlock _restoreContentsLabel = new();
+    private readonly TextBlock _keepBackupsLabel = new();
+    private readonly TextBlock _writeWarningText = new();
 
     private AppSettings _settings = new();
     private StatusSnapshot? _currentStatus;
     private bool _loadingSettings;
+    private string _language = MacUiText.English;
 
     public MainWindow()
     {
@@ -86,29 +98,38 @@ public sealed class MainWindow : Window
     {
         Grid panel = new()
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*,180,Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,170,Auto,Auto,Auto,132"),
             ColumnSpacing = 10
         };
 
-        TextBlock label = Label("Codex Home");
-        _codexHomeText.Watermark = AppConstants.DefaultCodexHome();
+        ConfigureLabel(_codexHomeLabel, "Codex Home");
+        ConfigureLabel(_languageLabel, "Language");
+        _codexHomeText.PlaceholderText = AppConstants.DefaultCodexHome();
         _codexHomeText.MinHeight = 34;
         _recentHomes.MinHeight = 34;
         _recentHomes.PlaceholderText = "Recent";
+        _languageCombo.MinHeight = 34;
+        _languageCombo.Items.Add("English");
+        _languageCombo.Items.Add("中文");
+        _languageCombo.SelectedIndex = 0;
         _browseButton.Content = "Browse";
         _browseButton.MinHeight = 34;
         _refreshButton.Content = "Refresh";
         _refreshButton.MinHeight = 34;
 
-        panel.Children.Add(label);
+        panel.Children.Add(_codexHomeLabel);
         panel.Children.Add(_codexHomeText);
         panel.Children.Add(_recentHomes);
         panel.Children.Add(_browseButton);
         panel.Children.Add(_refreshButton);
+        panel.Children.Add(_languageLabel);
+        panel.Children.Add(_languageCombo);
         Grid.SetColumn(_codexHomeText, 1);
         Grid.SetColumn(_recentHomes, 2);
         Grid.SetColumn(_browseButton, 3);
         Grid.SetColumn(_refreshButton, 4);
+        Grid.SetColumn(_languageLabel, 5);
+        Grid.SetColumn(_languageCombo, 6);
         return Card(panel);
     }
 
@@ -137,7 +158,7 @@ public sealed class MainWindow : Window
         _statusText.FontSize = 12;
         _statusText.Background = Brushes.White;
 
-        return Section("Status", _statusText);
+        return Section(_statusTitle, _statusText);
     }
 
     private Control BuildProviderPanel()
@@ -156,7 +177,7 @@ public sealed class MainWindow : Window
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
             ColumnSpacing = 8
         };
-        _manualProviderText.Watermark = "Add provider id";
+        _manualProviderText.PlaceholderText = "Add provider id";
         _manualProviderText.MinHeight = 34;
         _addProviderButton.Content = "Add";
         _addProviderButton.MinHeight = 34;
@@ -173,7 +194,7 @@ public sealed class MainWindow : Window
         Grid.SetRow(addPanel, 1);
         Grid.SetRow(_removeProviderButton, 2);
 
-        return Section("Providers", panel);
+        return Section(_providersTitle, panel);
     }
 
     private Control BuildActionsPanel()
@@ -216,14 +237,17 @@ public sealed class MainWindow : Window
         _busyText.Text = "Ready";
         _busyText.Foreground = Brush.Parse("#166534");
 
-        panel.Children.Add(MutedLabel("Target provider"));
+        ConfigureMutedLabel(_targetProviderLabel, "Target provider");
+        ConfigureMutedLabel(_restoreContentsLabel, "Restore contents");
+
+        panel.Children.Add(_targetProviderLabel);
         panel.Children.Add(_selectedProviderText);
         panel.Children.Add(_switchConfigCheck);
         panel.Children.Add(BuildRetentionPanel());
-        panel.Children.Add(WarningBlock("Close Codex CLI, Codex App, app-server, and related terminals before executing write actions."));
+        panel.Children.Add(WarningBlock(_writeWarningText));
         panel.Children.Add(_executeButton);
         panel.Children.Add(Separator());
-        panel.Children.Add(MutedLabel("Restore contents"));
+        panel.Children.Add(_restoreContentsLabel);
         panel.Children.Add(_restoreConfigCheck);
         panel.Children.Add(_restoreDatabaseCheck);
         panel.Children.Add(_restoreSessionsCheck);
@@ -232,7 +256,7 @@ public sealed class MainWindow : Window
         panel.Children.Add(_pruneBackupsButton);
         panel.Children.Add(_busyText);
 
-        return Section("Actions", panel);
+        return Section(_actionsTitle, panel);
     }
 
     private Control BuildRetentionPanel()
@@ -243,7 +267,8 @@ public sealed class MainWindow : Window
             Spacing = 8,
             VerticalAlignment = VerticalAlignment.Center
         };
-        panel.Children.Add(MutedLabel("Keep backups"));
+        ConfigureMutedLabel(_keepBackupsLabel, "Keep backups");
+        panel.Children.Add(_keepBackupsLabel);
         panel.Children.Add(_backupRetentionInput);
         return panel;
     }
@@ -255,13 +280,14 @@ public sealed class MainWindow : Window
         _logText.FontFamily = FontFamily.Parse("Menlo, Consolas, monospace");
         _logText.FontSize = 12;
         _logText.Background = Brushes.White;
-        return Section("Execution Log", _logText);
+        return Section(_logTitle, _logText);
     }
 
     private void WireEvents()
     {
         _browseButton.Click += async (_, _) => await BrowseCodexHomeAsync();
         _refreshButton.Click += async (_, _) => await RefreshStatusAsync();
+        _languageCombo.SelectionChanged += async (_, _) => await ChangeLanguageAsync();
         _recentHomes.SelectionChanged += (_, _) =>
         {
             if (_recentHomes.SelectedItem is string home)
@@ -299,11 +325,14 @@ public sealed class MainWindow : Window
     {
         _loadingSettings = true;
         _settings = await _settingsService.LoadAsync();
+        _language = MacUiText.NormalizeLanguage(_settings.UiLanguage);
+        _languageCombo.SelectedIndex = MacUiText.IsChinese(_language) ? 1 : 0;
+        ApplyLanguage();
         ApplyWindowBounds(_settings.WindowBounds);
         ReloadRecentHomes();
         _codexHomeText.Text = _settings.LastCodexHome ?? AppConstants.DefaultCodexHome();
         _backupRetentionInput.Value = Math.Max(1, _settings.BackupRetentionCount);
-        AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Loaded settings: {_settingsService.SettingsPath}");
+        AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {T("loadedSettings")}: {_settingsService.SettingsPath}");
         _loadingSettings = false;
         await RefreshStatusAsync();
     }
@@ -311,7 +340,26 @@ public sealed class MainWindow : Window
     private async Task RefreshStatusAsync()
     {
         string codexHome = CurrentCodexHome();
-        await RunBusyAsync("Refreshing...", () => RefreshStatusCoreAsync(codexHome));
+        await RunBusyAsync(T("refreshing"), () => RefreshStatusCoreAsync(codexHome));
+    }
+
+    private async Task ChangeLanguageAsync()
+    {
+        if (_loadingSettings)
+        {
+            return;
+        }
+
+        _language = _languageCombo.SelectedIndex == 1 ? MacUiText.Chinese : MacUiText.English;
+        _settings = _settingsService.UpdateUiLanguage(_settings, _language);
+        await _settingsService.SaveAsync(_settings);
+        ApplyLanguage();
+        if (_currentStatus is not null)
+        {
+            _statusText.Text = MacDisplayFormatter.FormatStatus(_currentStatus, _language);
+        }
+        ReloadProviderList();
+        AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {T("languageChanged")}: {(_language == MacUiText.Chinese ? "中文" : "English")}");
     }
 
     private async Task BrowseCodexHomeAsync()
@@ -325,7 +373,7 @@ public sealed class MainWindow : Window
 
         IReadOnlyList<IStorageFolder> folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Choose .codex folder",
+            Title = T("chooseCodexFolder"),
             AllowMultiple = false,
             SuggestedStartLocation = start
         });
@@ -376,7 +424,7 @@ public sealed class MainWindow : Window
         string provider = (_manualProviderText.Text ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(provider))
         {
-            await ShowInfoAsync("Enter a provider id before adding it.");
+            await ShowInfoAsync(T("enterProvider"));
             return;
         }
 
@@ -385,7 +433,7 @@ public sealed class MainWindow : Window
         _manualProviderText.Clear();
         ReloadProviderList();
         SelectProvider(provider);
-        AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Added manual provider: {provider}");
+        AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {T("addedManualProvider")}: {provider}");
     }
 
     private async Task RemoveManualProviderAsync()
@@ -393,7 +441,7 @@ public sealed class MainWindow : Window
         string? provider = SelectedProvider();
         if (string.IsNullOrWhiteSpace(provider))
         {
-            await ShowInfoAsync("Select a provider first.");
+            await ShowInfoAsync(T("selectProvider"));
             return;
         }
 
@@ -401,7 +449,7 @@ public sealed class MainWindow : Window
         await _settingsService.SaveAsync(_settings);
         ReloadProviderList();
         SelectProvider(_currentStatus?.CurrentProvider.Provider);
-        AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Removed manual provider: {provider}");
+        AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {T("removedManualProvider")}: {provider}");
     }
 
     private async Task ExecuteSyncOrSwitchAsync()
@@ -409,22 +457,22 @@ public sealed class MainWindow : Window
         string? provider = SelectedProvider();
         if (string.IsNullOrWhiteSpace(provider))
         {
-            await ShowInfoAsync("Select a target provider first.");
+            await ShowInfoAsync(T("selectTargetProvider"));
             return;
         }
 
         string mode = IsSwitchMode()
-            ? "switch config.toml and sync metadata"
-            : "sync metadata only";
+            ? T("confirmSwitchMode")
+            : T("confirmSyncMode");
 
         if (!await ConfirmAsync(
-            "Confirm Write Action",
-            $"This will {mode} for provider \"{provider}\".\n\nClose Codex CLI, Codex App, app-server, and related terminals first.\n\nA backup will be created before metadata is changed. Continue?"))
+            T("confirmWriteTitle"),
+            string.Format(T("confirmWriteMessage"), mode, provider)))
         {
             return;
         }
 
-        await RunBusyAsync("Executing...", async () =>
+        await RunBusyAsync(T("executing"), async () =>
         {
             string codexHome = CurrentCodexHome();
             int backupRetentionCount = CurrentBackupRetentionCount();
@@ -434,8 +482,8 @@ public sealed class MainWindow : Window
 
             _settings = _settingsService.UpdateState(_settings, provider, result.BackupDir, CaptureWindowBounds(), backupRetentionCount);
             await _settingsService.SaveAsync(_settings);
-            AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Execution finished");
-            AppendLog(TextFormatter.FormatSyncResult(result, IsSwitchMode() ? "Switched and synced" : "Synced"));
+            AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {T("executionFinished")}");
+            AppendLog(MacDisplayFormatter.FormatSyncResult(result, IsSwitchMode() ? T("switchedAndSynced") : T("synced"), _language));
             AppendLog(string.Empty);
             await RefreshStatusCoreAsync(codexHome);
             SelectProvider(provider);
@@ -455,7 +503,7 @@ public sealed class MainWindow : Window
 
         IReadOnlyList<IStorageFolder> folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Choose backup folder",
+            Title = T("chooseBackupFolder"),
             AllowMultiple = false,
             SuggestedStartLocation = start
         });
@@ -470,7 +518,7 @@ public sealed class MainWindow : Window
         bool restoreSessions = _restoreSessionsCheck.IsChecked == true;
         if (!restoreConfig && !restoreDatabase && !restoreSessions)
         {
-            await ShowInfoAsync("Choose at least one restore target.");
+            await ShowInfoAsync(T("chooseRestoreTarget"));
             return;
         }
 
@@ -482,13 +530,13 @@ public sealed class MainWindow : Window
         }.Where(static value => value is not null));
 
         if (!await ConfirmAsync(
-            "Restore Backup",
-            $"Restore this backup?\n\n{backupDir}\n\nThis will overwrite: {restoreTargets}.\nClose Codex first. Continue?"))
+            T("restoreTitle"),
+            string.Format(T("restoreMessage"), backupDir, restoreTargets)))
         {
             return;
         }
 
-        await RunBusyAsync("Restoring...", async () =>
+        await RunBusyAsync(T("restoring"), async () =>
         {
             string codexHome = CurrentCodexHome();
             RestoreResult result = await Task.Run(async () => await _syncService.RunRestoreAsync(
@@ -502,8 +550,8 @@ public sealed class MainWindow : Window
                 }));
             _settings = _settingsService.UpdateState(_settings, SelectedProvider(), backupDir, CaptureWindowBounds(), CurrentBackupRetentionCount());
             await _settingsService.SaveAsync(_settings);
-            AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Restore finished");
-            AppendLog(TextFormatter.FormatRestoreResult(result));
+            AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {T("restoreFinished")}");
+            AppendLog(MacDisplayFormatter.FormatRestoreResult(result, _language));
             AppendLog(string.Empty);
             await RefreshStatusCoreAsync(codexHome);
         });
@@ -531,18 +579,18 @@ public sealed class MainWindow : Window
     private async Task PruneBackupsAsync()
     {
         if (!await ConfirmAsync(
-            "Clean Old Backups",
-            $"Keep only the newest {CurrentBackupRetentionCount()} managed backup(s).\n\nDeleted backup folders cannot be restored from this app. Continue?"))
+            T("cleanTitle"),
+            string.Format(T("cleanMessage"), CurrentBackupRetentionCount())))
         {
             return;
         }
 
-        await RunBusyAsync("Cleaning backups...", async () =>
+        await RunBusyAsync(T("cleaning"), async () =>
         {
             string codexHome = CurrentCodexHome();
             BackupPruneResult result = await Task.Run(async () => await _syncService.RunPruneBackupsAsync(codexHome, CurrentBackupRetentionCount()));
-            AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Backup cleanup finished");
-            AppendLog(TextFormatter.FormatBackupPruneResult(result));
+            AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {T("backupCleanupFinished")}");
+            AppendLog(MacDisplayFormatter.FormatBackupPruneResult(result, _language));
             AppendLog(string.Empty);
             await RefreshStatusCoreAsync(codexHome);
         });
@@ -556,11 +604,11 @@ public sealed class MainWindow : Window
         _settings = _settingsService.UpdateState(_settings, SelectedProvider(), _settings.LastBackupDirectory, CaptureWindowBounds(), CurrentBackupRetentionCount());
         await _settingsService.SaveAsync(_settings);
 
-        _statusText.Text = TextFormatter.FormatStatus(_currentStatus);
+        _statusText.Text = MacDisplayFormatter.FormatStatus(_currentStatus, _language);
         ReloadRecentHomes();
         ReloadProviderList();
         _codexHomeText.Text = _currentStatus.CodexHome;
-        AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Refreshed: {_currentStatus.CodexHome}");
+        AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {T("refreshed")}: {_currentStatus.CodexHome}");
     }
 
     private void ReloadRecentHomes()
@@ -585,7 +633,7 @@ public sealed class MainWindow : Window
                 ProviderListItem item = new()
                 {
                     Option = option,
-                    SourcesText = TextFormatter.FormatProviderSources(option),
+                    SourcesText = MacDisplayFormatter.FormatProviderSources(option, _language),
                     DetailText = ProviderDetailText(option)
                 };
                 _providerList.Items.Add(BuildProviderRow(item));
@@ -639,20 +687,20 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static string ProviderDetailText(ProviderOption option)
+    private string ProviderDetailText(ProviderOption option)
     {
         List<string> details = [];
         if (option.IsCurrentProvider)
         {
-            details.Add("current");
+            details.Add(T("current"));
         }
         if (option.IsManual)
         {
-            details.Add("manual");
+            details.Add(T("manual"));
         }
         if (option.IsSaved)
         {
-            details.Add("saved");
+            details.Add(T("saved"));
         }
 
         return details.Count == 0 ? string.Empty : string.Join(" · ", details);
@@ -678,14 +726,14 @@ public sealed class MainWindow : Window
     private void UpdateSelectionLabel()
     {
         string? provider = SelectedProvider();
-        _selectedProviderText.Text = string.IsNullOrWhiteSpace(provider) ? "No provider selected" : provider;
+        _selectedProviderText.Text = string.IsNullOrWhiteSpace(provider) ? T("noProvider") : provider;
     }
 
     private void UpdateExecuteButtonText()
     {
         _executeButton.Content = IsSwitchMode()
-            ? "Switch Config + Sync"
-            : "Sync Metadata Only";
+            ? T("switchSync")
+            : T("syncMetadata");
     }
 
     private string? SelectedProvider()
@@ -715,6 +763,7 @@ public sealed class MainWindow : Window
         try
         {
             _settings = _settingsService.RecordCodexHome(_settings, CurrentCodexHome());
+            _settings = _settingsService.UpdateUiLanguage(_settings, _language);
             _settings = _settingsService.UpdateState(_settings, SelectedProvider(), _settings.LastBackupDirectory, CaptureWindowBounds(), CurrentBackupRetentionCount());
             _settingsService.Save(_settings);
         }
@@ -761,12 +810,12 @@ public sealed class MainWindow : Window
         }
         catch (Exception error)
         {
-            AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Error: {error}");
+            AppendLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {T("error")}: {error}");
             await ShowErrorAsync(error);
         }
         finally
         {
-            SetBusy(false, "Ready");
+            SetBusy(false, T("ready"));
         }
     }
 
@@ -793,6 +842,7 @@ public sealed class MainWindow : Window
         _manualProviderText.IsEnabled = !busy;
         _codexHomeText.IsEnabled = !busy;
         _recentHomes.IsEnabled = !busy;
+        _languageCombo.IsEnabled = !busy;
     }
 
     private void AppendLog(string message)
@@ -805,20 +855,54 @@ public sealed class MainWindow : Window
 
     private async Task<bool> ConfirmAsync(string title, string message)
     {
-        ConfirmationDialog dialog = new(title, message, "Continue", "Cancel");
+        ConfirmationDialog dialog = new(title, message, T("continue"), T("cancel"));
         return await dialog.ShowDialog<bool>(this);
     }
 
     private async Task ShowInfoAsync(string message)
     {
-        ConfirmationDialog dialog = new("Codex Provider Sync", message, "OK", null);
+        ConfirmationDialog dialog = new("Codex Provider Sync", message, T("ok"), null);
         await dialog.ShowDialog<bool>(this);
     }
 
     private async Task ShowErrorAsync(Exception error)
     {
-        ConfirmationDialog dialog = new("Error", error.Message, "OK", null);
+        ConfirmationDialog dialog = new(T("error"), error.Message, T("ok"), null);
         await dialog.ShowDialog<bool>(this);
+    }
+
+    private void ApplyLanguage()
+    {
+        _languageLabel.Text = T("language");
+        _recentHomes.PlaceholderText = T("recent");
+        _browseButton.Content = T("browse");
+        _refreshButton.Content = T("refresh");
+        _statusTitle.Text = T("status");
+        _providersTitle.Text = T("providers");
+        _actionsTitle.Text = T("actions");
+        _logTitle.Text = T("executionLog");
+        _manualProviderText.PlaceholderText = T("addProvider");
+        _addProviderButton.Content = T("add");
+        _removeProviderButton.Content = T("removeManual");
+        _switchConfigCheck.Content = T("switchConfig");
+        _restoreConfigCheck.Content = T("restoreConfig");
+        _restoreDatabaseCheck.Content = T("restoreSqlite");
+        _restoreSessionsCheck.Content = T("restoreRollout");
+        _restoreButton.Content = T("restoreBackup");
+        _openBackupButton.Content = T("openBackupFolder");
+        _pruneBackupsButton.Content = T("cleanBackups");
+        _targetProviderLabel.Text = T("targetProvider");
+        _restoreContentsLabel.Text = T("restoreContents");
+        _keepBackupsLabel.Text = T("keepBackups");
+        _writeWarningText.Text = T("writeWarning");
+        _busyText.Text = T("ready");
+        UpdateExecuteButtonText();
+        UpdateSelectionLabel();
+    }
+
+    private string T(string key)
+    {
+        return MacUiText.Get(_language, key);
     }
 
     private static Border Card(Control content)
@@ -834,48 +918,46 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static Control Section(string title, Control content)
+    private static Control Section(TextBlock title, Control content)
     {
         Grid panel = new()
         {
             RowDefinitions = new RowDefinitions("Auto,*"),
             RowSpacing = 8
         };
-        panel.Children.Add(new TextBlock
-        {
-            Text = title,
-            FontSize = 13,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = Brush.Parse("#18181b")
-        });
+        ConfigureSectionTitle(title);
+        panel.Children.Add(title);
         panel.Children.Add(content);
         Grid.SetRow(content, 1);
         return Card(panel);
     }
 
-    private static TextBlock Label(string text)
+    private static void ConfigureLabel(TextBlock label, string text)
     {
-        return new TextBlock
-        {
-            Text = text,
-            VerticalAlignment = VerticalAlignment.Center,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = Brush.Parse("#18181b")
-        };
+        label.Text = text;
+        label.VerticalAlignment = VerticalAlignment.Center;
+        label.FontWeight = FontWeight.SemiBold;
+        label.Foreground = Brush.Parse("#18181b");
     }
 
-    private static TextBlock MutedLabel(string text)
+    private static void ConfigureSectionTitle(TextBlock title)
     {
-        return new TextBlock
-        {
-            Text = text,
-            Foreground = Brush.Parse("#52525b"),
-            FontSize = 12
-        };
+        title.FontSize = 13;
+        title.FontWeight = FontWeight.SemiBold;
+        title.Foreground = Brush.Parse("#18181b");
     }
 
-    private static Border WarningBlock(string text)
+    private static void ConfigureMutedLabel(TextBlock label, string text)
     {
+        label.Text = text;
+        label.Foreground = Brush.Parse("#52525b");
+        label.FontSize = 12;
+    }
+
+    private static Border WarningBlock(TextBlock text)
+    {
+        text.Foreground = Brush.Parse("#9a3412");
+        text.TextWrapping = TextWrapping.Wrap;
         return new Border
         {
             Background = Brush.Parse("#fff7ed"),
@@ -883,12 +965,7 @@ public sealed class MainWindow : Window
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(10),
-            Child = new TextBlock
-            {
-                Text = text,
-                Foreground = Brush.Parse("#9a3412"),
-                TextWrapping = TextWrapping.Wrap
-            }
+            Child = text
         };
     }
 
